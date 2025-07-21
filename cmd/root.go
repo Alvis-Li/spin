@@ -61,6 +61,10 @@ func NewCmdRoot(outWriter, errWriter io.Writer) (*cobra.Command, *RootOptions) {
 		}
 		options.Ui = output.NewUI(options.quiet, options.color, outputFormater, outw, errw)
 
+		if cmd.Name() == "cookie" && cmd.HasParent() && cmd.Parent().Name() == "auth" {
+			return nil
+		}
+
 		gateClient, err := gateclient.NewGateClient(
 			options.Ui,
 			options.gateEndpoint,

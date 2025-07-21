@@ -141,13 +141,36 @@ func NewGateClient(ui output.Ui, gateEndpoint, defaultHeaders, configLocation st
 		}
 	}
 
+	if gateClient.Config.Auth != nil && gateClient.Config.Auth.Cookie != "" {
+		if httpClient.Jar != nil {
+			if u, err := url.Parse(gateClient.GateEndpoint()); err == nil {
+				// The cookie string may contain multiple cookies separated by ';'
+				cookiePairs := strings.Split(gateClient.Config.Auth.Cookie, ";")
+				var cookies []*http.Cookie
+				for _, pair := range cookiePairs {
+					nameVal := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+					if len(nameVal) != 2 {
+						continue
+					}
+					cookies = append(cookies, &http.Cookie{
+						Name:  nameVal[0],
+						Value: nameVal[1],
+						Path:  "/",
+					})
+				}
+				httpClient.Jar.SetCookies(u, cookies)
+			}
+		}
+	}
+
 	gateClient.Context, err = ContextWithAuth(gateClient.Context, gateClient.Config.Auth)
+	if err != nil {
+		return nil, err
+	}
 
 	if ignoreCertErrors {
 		if httpClient.Transport.(*http.Transport).TLSClientConfig == nil {
-			httpClient.Transport.(*http.Transport).TLSClientConfig = &tls.Config{
-				InsecureSkipVerify: true,
-			}
+			httpClient.Transport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 		} else {
 			httpClient.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = true
 		}
@@ -212,6 +235,27 @@ func NewGateClient(ui output.Ui, gateEndpoint, defaultHeaders, configLocation st
 				return nil, fmt.Errorf("Bad default-header value, use key=value form: %s", element)
 			}
 			m[strings.TrimSpace(header[0])] = strings.TrimSpace(header[1])
+		}
+	}
+
+	// Automatically include cookie from configuration file if present.
+	if gateClient.Config.Auth != nil && gateClient.Config.Auth.Cookie != "" {
+		// Do not overwrite header supplied via --default-headers flag.
+		if _, exists := m["Cookie"]; !exists {
+			m["Cookie"] = gateClient.Config.Auth.Cookie
+		}
+	}
+
+	// XSRF header injection (needs map `m` available)
+	if gateClient.Config.Auth != nil && gateClient.Config.Auth.Cookie != "" {
+		parts := strings.Split(gateClient.Config.Auth.Cookie, ";")
+		for _, p := range parts {
+			kv := strings.SplitN(strings.TrimSpace(p), "=", 2)
+			if len(kv) == 2 && kv[0] == "XSRF-TOKEN" {
+				if _, exists := m["X-XSRF-TOKEN"]; !exists {
+					m["X-XSRF-TOKEN"] = kv[1]
+				}
+			}
 		}
 	}
 

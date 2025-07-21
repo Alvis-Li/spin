@@ -35,4 +35,6 @@ type Config struct {
 	Ldap             *ldap.Config   `json:"ldap,omitempty" yaml:"ldap,omitempty"`
 
 	GoogleServiceAccount *gsa.Config `json:"google_service_account,omitempty" yaml:"google_service_account,omitempty"`
+
+  Cookie string `json:"cookie,omitempty" yaml:"cookie,omitempty"`
 }
